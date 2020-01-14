@@ -1146,14 +1146,24 @@ export class ProjectView
         return undefined;
     }
 
+    private loadingHeader: pxt.workspace.Header;
     loadHeaderAsync(h: pxt.workspace.Header, editorState?: pxt.editor.EditorState): Promise<void> {
         if (!h)
             return Promise.resolve()
 
+        // check that we are not loading another project
+        if (this.loadingHeader) {
+            pxt.tickEvent('app.load.race');
+            pxt.log(`header loading race`)
+            return Promise.resolve();
+        }
+
+        // check version is compatible
         const checkAsync = this.tryCheckTargetVersionAsync(h.targetVersion);
         if (checkAsync)
             return checkAsync.then(() => this.openHome());
 
+        this.loadingHeader = h;
         pxt.debug(`loading ${h.id} (pxt v${h.targetVersion})`);
         this.stopSimulator(true);
         if (pxt.appTarget.simulator && pxt.appTarget.simulator.aspectRatio)
@@ -1269,6 +1279,7 @@ export class ProjectView
                 pxt.BrowserUtils.changeHash("#editor", true);
                 document.getElementById("root").focus(); // Clear the focus.
                 this.editorLoaded();
+                this.loadingHeader = undefined;
             })
     }
 
@@ -1850,6 +1861,10 @@ export class ProjectView
     openHome() {
         const hasHome = !pxt.shell.isControllerMode();
         if (!hasHome) return;
+
+        // are we still loading a header? ignore
+        if (this.loadingHeader)
+            return;
 
         this.stopSimulator(true); // don't keep simulator around
         this.showKeymap(false); // close keymap if open
